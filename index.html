@@ -45,7 +45,6 @@
             background: #ffffff;
             border: 1px solid #e2e8f0;
             border-radius: 1.5rem;
-            transition: 0.2s;
             display: flex;
             flex-direction: column;
         }
@@ -161,7 +160,6 @@
     for (let [rus, mell] of rusToMellExceptions.entries()) {
         mellToRusExceptions.set(mell.toLowerCase(), rus);
     }
-
     const extraReverse = [
         ["друн", "друг"], ["друность", "друган"], ["учительность", "училка"],
         ["учинительность", "ученик"], ["учебность", "учеба"], ["кьо этость", "кто это"],
@@ -196,22 +194,8 @@
         ["отказано", "не"]
     ];
 
-    function replacePhrases(text, phrases) {
-        let result = text;
-        for (let [from, to] of phrases) {
-            const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const regex = new RegExp(`(^|[\\s\\p{P}])(${escaped})(?=[\\s\\p{P}]|$)`, 'giu');
-            result = result.replace(regex, (match, before, word) => {
-                let replacement = to;
-                if (word === word.toUpperCase()) replacement = to.toUpperCase();
-                else if (word[0] === word[0].toUpperCase() && word.slice(1).toLowerCase() === word.slice(1))
-                    replacement = to.charAt(0).toUpperCase() + to.slice(1).toLowerCase();
-                else replacement = to.toLowerCase();
-                return before + replacement;
-            });
-        }
-        return result;
-    }
+    phraseRusToMell.sort((a,b) => b[0].length - a[0].length);
+    phraseMellToRus.sort((a,b) => b[0].length - a[0].length);
 
     function isGarbageWord(word) {
         if (!word || word.length === 0) return true;
@@ -276,10 +260,32 @@
 
     function translateToMell(text) {
         if (!text.trim()) return "";
-        let working = replacePhrases(text, phraseRusToMell);
+        let working = text;
+        const placeholders = new Map();
+        let idx = 0;
+
+        for (let [from, to] of phraseRusToMell) {
+            const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(^|[\\s\\p{P}])(${escaped})(?=[\\s\\p{P}]|$)`, 'giu');
+            working = working.replace(regex, (match, before, word) => {
+                let replacement = to;
+                if (word === word.toUpperCase()) replacement = to.toUpperCase();
+                else if (word[0] === word[0].toUpperCase() && word.slice(1).toLowerCase() === word.slice(1))
+                    replacement = to.charAt(0).toUpperCase() + to.slice(1).toLowerCase();
+                else replacement = to.toLowerCase();
+                const ph = `\uE000${idx++}\uE001`;
+                placeholders.set(ph, replacement);
+                return before + ph;
+            });
+        }
+
         const tokens = tokenize(working);
         const out = [];
         for (let t of tokens) {
+            if (placeholders.has(t)) {
+                out.push(placeholders.get(t));
+                continue;
+            }
             if (!/[a-zA-Zа-яА-ЯёЁ]/.test(t)) {
                 out.push(t);
                 continue;
@@ -300,10 +306,32 @@
 
     function translateToRus(text) {
         if (!text.trim()) return "";
-        let working = replacePhrases(text, phraseMellToRus);
+        let working = text;
+        const placeholders = new Map();
+        let idx = 0;
+
+        for (let [from, to] of phraseMellToRus) {
+            const escaped = from.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(`(^|[\\s\\p{P}])(${escaped})(?=[\\s\\p{P}]|$)`, 'giu');
+            working = working.replace(regex, (match, before, word) => {
+                let replacement = to;
+                if (word === word.toUpperCase()) replacement = to.toUpperCase();
+                else if (word[0] === word[0].toUpperCase() && word.slice(1).toLowerCase() === word.slice(1))
+                    replacement = to.charAt(0).toUpperCase() + to.slice(1).toLowerCase();
+                else replacement = to.toLowerCase();
+                const ph = `\uE000${idx++}\uE001`;
+                placeholders.set(ph, replacement);
+                return before + ph;
+            });
+        }
+
         const tokens = tokenize(working);
         const out = [];
         for (let t of tokens) {
+            if (placeholders.has(t)) {
+                out.push(placeholders.get(t));
+                continue;
+            }
             if (!/[a-zA-Zа-яА-ЯёЁ]/.test(t)) {
                 out.push(t);
                 continue;
@@ -331,7 +359,7 @@
     const rightLangLabel = document.getElementById('rightLang');
     const swapBtn = document.getElementById('swapBtn');
 
-    let currentMode = 'ru-to-mell'; 
+    let currentMode = 'ru-to-mell';
 
     function updateTranslation() {
         const inputText = inputArea.value;
@@ -351,7 +379,6 @@
     inputArea.addEventListener('input', debouncedUpdate);
 
     function swapLanguages() {
-        // меняем режим
         if (currentMode === 'ru-to-mell') {
             currentMode = 'mell-to-ru';
             leftLangLabel.innerText = 'Меллстройный';
@@ -364,13 +391,12 @@
         const leftText = inputArea.value;
         const rightText = outputArea.innerText;
         inputArea.value = rightText;
-        updateTranslation(); 
+        updateTranslation();
     }
 
     swapBtn.addEventListener('click', swapLanguages);
 
-
-    inputArea.value = 'плохое, попа, жопа, училка, нет, почему, ахахаха';
+    inputArea.value = 'нормально, попа, жопа, училка, нет, почему';
     currentMode = 'ru-to-mell';
     leftLangLabel.innerText = 'Русский';
     rightLangLabel.innerText = 'Меллстройный';
