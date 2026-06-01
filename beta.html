@@ -325,11 +325,13 @@
     }
 
     function usbGeneralRule(wordLower) {
-        return wordLower.toUpperCase().replace(/[^A-Z]/g, '');
-    }
-
-    function reverseUsbGeneralRule(wordLower) {
-        return wordLower;
+        let result = '';
+        for (let ch of wordLower) {
+            if ('аеёиоуыэюя'.includes(ch)) result += 'aeiouyaeuya'['аеёиоуыэюя'.indexOf(ch)] || ch;
+            else if ('бвгджзйклмнпрстфхцчшщъыь'.includes(ch)) result += 'bvgdjzklnmprstfhcssy'['бвгджзйклмнпрстфхцчшщъыь'.indexOf(ch)] || ch;
+            else result += ch;
+        }
+        return result.toUpperCase().replace(/[^A-Z]/g, '');
     }
 
     function applyCase(original, transformed) {
@@ -347,11 +349,18 @@
 
     function translateByRules(text, srcLang, dstLang) {
         if (!text.trim()) return "";
+        if (srcLang === dstLang) return text;
+        if ((srcLang === 'usb' && dstLang === 'mell') || (srcLang === 'mell' && dstLang === 'usb')) {
+            const through = translateByRules(text, srcLang, 'ru');
+            return translateByRules(through, 'ru', dstLang);
+        }
+
         let working = text;
         const placeholders = new Map();
         let idx = 0;
 
-        let phrasesFrom, phrasesTo, exceptionsMap, generalRule, reverseRule, targetExceptionsMap;
+        let phrasesFrom, exceptionsMap, generalRule;
+        let useGeneralRule = true;
         if (srcLang === 'ru' && dstLang === 'mell') {
             phrasesFrom = phraseRusToMell;
             exceptionsMap = rusToMellExceptions;
@@ -359,7 +368,7 @@
         } else if (srcLang === 'mell' && dstLang === 'ru') {
             phrasesFrom = phraseMellToRus;
             exceptionsMap = mellToRusExceptions;
-            generalRule = (w) => { const rev = reverseGeneralRule(w); return rev || w; };
+            generalRule = reverseGeneralRule;
         } else if (srcLang === 'ru' && dstLang === 'usb') {
             phrasesFrom = phraseRusToUsb;
             exceptionsMap = rusToUsbExceptions;
@@ -367,11 +376,8 @@
         } else if (srcLang === 'usb' && dstLang === 'ru') {
             phrasesFrom = phraseUsbToRus;
             exceptionsMap = usbToRusExceptions;
-            generalRule = (w) => { const rev = reverseUsbGeneralRule(w); return rev || w; };
-        } else if (srcLang === 'mell' && dstLang === 'usb') {
-            return translateByRules(translateByRules(text, 'mell', 'ru'), 'ru', 'usb');
-        } else if (srcLang === 'usb' && dstLang === 'mell') {
-            return translateByRules(translateByRules(text, 'usb', 'ru'), 'ru', 'mell');
+            generalRule = null;
+            useGeneralRule = false;
         } else {
             return text;
         }
@@ -411,9 +417,13 @@
                 out.push(t);
                 continue;
             }
-            let transformed = generalRule(low);
-            if (transformed) {
-                out.push(applyCase(t, transformed));
+            if (useGeneralRule && generalRule) {
+                let transformed = generalRule(low);
+                if (transformed) {
+                    out.push(applyCase(t, transformed));
+                } else {
+                    out.push(t);
+                }
             } else {
                 out.push(t);
             }
@@ -446,12 +456,8 @@
     }
 
     inputArea.addEventListener('input', debouncedUpdate);
-    leftLangSelect.addEventListener('change', () => {
-        debouncedUpdate();
-    });
-    rightLangSelect.addEventListener('change', () => {
-        debouncedUpdate();
-    });
+    leftLangSelect.addEventListener('change', debouncedUpdate);
+    rightLangSelect.addEventListener('change', debouncedUpdate);
 
     function swapLanguages() {
         const leftLang = leftLangSelect.value;
