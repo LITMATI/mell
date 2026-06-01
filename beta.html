@@ -470,11 +470,11 @@
             phraseMellToRus.sort((a,b)=>b[0].length-a[0].length);
             phraseRusToUsb.sort((a,b)=>b[0].length-a[0].length);
             phraseUsbToRus.sort((a,b)=>b[0].length-a[0].length);
-            document.getElementById('statusMsg').innerHTML = '✅ Словарь загружен';
+            document.getElementById('statusMsg').innerHTML = 'Словарь загружен';
             updateTranslation();
         } catch(e) {
             console.error(e);
-            document.getElementById('statusMsg').innerHTML = '❌ Ошибка загрузки dictionary.json. Убедитесь, что файл лежит рядом.';
+            document.getElementById('statusMsg').innerHTML = 'Ошибка загрузки dictionary.json. Убедитесь, что файл лежит рядом.';
         }
     }
 
