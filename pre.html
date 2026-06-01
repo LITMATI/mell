@@ -20,6 +20,20 @@
             padding: 1rem;
             position: relative;
         }
+        .prerelease-tag {
+            position: fixed;
+            top: 16px;
+            left: 16px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #000000;
+            opacity: 0.3;
+            background: transparent;
+            pointer-events: none;
+            z-index: 1000;
+            letter-spacing: 0.5px;
+        }
         .container {
             max-width: 1100px;
             width: 100%;
@@ -128,34 +142,6 @@
                 transform: rotate(90deg) scale(1.02);
             }
         }
-        /* Водяной знак PRE-RELEASE */
-        .prerelease-watermark {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            pointer-events: none;
-            z-index: 1000;
-            font-family: monospace;
-            font-weight: bold;
-            font-size: clamp(3rem, 15vw, 12rem);
-            color: #000000;
-            opacity: 0.12;
-            white-space: nowrap;
-            transform: rotate(-15deg);
-            letter-spacing: 0.2em;
-            user-select: none;
-        }
-        @media (max-width: 600px) {
-            .prerelease-watermark {
-                opacity: 0.08;
-                font-size: clamp(2rem, 12vw, 8rem);
-            }
-        }
         .status {
             text-align: center;
             margin-top: 0.5rem;
@@ -183,7 +169,7 @@
     </style>
 </head>
 <body>
-<div class="prerelease-watermark" id="prereleaseLabel">PRE-RELEASE 1.1</div>
+<div class="prerelease-tag">PRE-RELEASE 1.2</div>
 <div class="container">
     <h1>Переводчик</h1>
     <div class="panel">
@@ -215,9 +201,6 @@
     </div>
 </div>
 <script>
-    // Версия PRE-RELEASE (ручная)
-    document.getElementById('prereleaseLabel').innerText = 'PRE-RELEASE 1.1';
-
     // Словари (заполняются из dictionary.json)
     let rusToMell = new Map();
     let mellToRus = new Map();
@@ -276,19 +259,46 @@
         return r;
     }
 
-    // Вспомогательные функции
-    function isGarbage(w) {
-        if (!w) return true;
-        let l = w.toLowerCase();
-        if (w.length <= 2 && !rusToMell.has(l) && !rusToUsb.has(l)) return true;
-        let patterns = [/(ха){2,}/i,/(ах){2,}/i,/(ол){2,}/i,/(ло){2,}/i,/(ла){2,}/i,
-            /хехе/i,/хихи/i,/хохо/i,/лол/i,/кек/i,/агага/i,/уху/i,/ааа+/i,/ыыы+/i,/еее+/i];
-        for (let p of patterns) if (p.test(l)) return true;
-        if (/(.)\1{3,}/i.test(l)) return true;
-        if (w === w.toUpperCase() && l.length >= 4 && /^(?:[а-яa-z])(?:[^а-яa-z]?\1)+$/i.test(l)) return true;
-        if (!/[аеёиоуыэюяaeiou]/i.test(l)) return true;
+    // Улучшенная проверка мусорных слов
+    function isGarbageWord(word) {
+        if (!word || word.length === 0) return true;
+        
+        // Слишком короткие (1-2 буквы) не переводим, если только это не исключение
+        if (word.length <= 2 && !rusToMell.has(word.toLowerCase()) && !rusToUsb.has(word.toLowerCase())) return true;
+        
+        const lower = word.toLowerCase();
+        
+        // Паттерны смеха и бессмысленных повторов
+        const laughPatterns = [
+            /(ха){2,}/i, /(ах){2,}/i, /(ол){2,}/i, /(ло){2,}/i, /(ла){2,}/i,
+            /хехе/i, /хихи/i, /хохо/i, /лол/i, /кек/i, /агага/i, /уху/i,
+            /ааа+/i, /ыыы+/i, /еее+/i
+        ];
+        for (let p of laughPatterns) if (p.test(lower)) return true;
+        
+        // Если слово состоит из повторяющихся одинаковых букв (ааа, ыыы)
+        if (/(.)\1{3,}/i.test(lower)) return true;
+        
+        // Если слово целиком в верхнем регистре и состоит из повторяющегося паттерна (АХАХА)
+        if (word === word.toUpperCase() && lower.length >= 4 && /^(?:[а-яa-z])(?:[^а-яa-z]?\1)+$/i.test(lower)) return true;
+        
+        // ПРОВЕРКА НА НАЛИЧИЕ ГЛАСНЫХ (обязательно)
+        const hasRussianVowel = /[аеёиоуыэюя]/i.test(lower);
+        const hasLatinVowel = /[aeiouy]/i.test(lower);
+        if (!hasRussianVowel && !hasLatinVowel) return true;
+        
+        // ДОПОЛНИТЕЛЬНАЯ ПРОВЕРКА: если в слове более 2 согласных подряд и слово НЕ является исключением, считаем мусором
+        // Это отсекает бессмысленные наборы типа "ывпт" (впт — три согласные подряд)
+        const consonantSeq = lower.match(/[бвгджзйклмнпрстфхцчшщ]{3,}/i);
+        if (consonantSeq && !rusToMell.has(lower) && !rusToUsb.has(lower)) {
+            return true;
+        }
+        
+        // Если слово содержит только одну гласную и много подряд идущих согласных (например "ывпт") — уже отсекли выше
         return false;
     }
+
+    // Остальные функции без изменений
     function applyGeneralRule(wordLower) {
         if (wordLower.endsWith("а")) return wordLower.slice(0, -1) + "оность";
         if (wordLower.endsWith("я")) return wordLower.slice(0, -1) + "ёность";
@@ -315,7 +325,7 @@
         return text.match(/([a-zA-Zа-яА-ЯёЁ]+|[^a-zA-Zа-яА-ЯёЁ]+)/g) || [];
     }
 
-    // ПЕРЕВОДЧИКИ (используют данные, загруженные из JSON)
+    // ПЕРЕВОДЧИКИ
     function translateToMell(text) {
         if (!text.trim()) return "";
         let work = text;
@@ -341,7 +351,7 @@
             if (!/[a-zA-Zа-яА-ЯёЁ]/.test(t)) { out.push(t); continue; }
             let low = t.toLowerCase();
             if (rusToMell.has(low)) { out.push(applyCase(t, rusToMell.get(low))); continue; }
-            if (isGarbage(t)) { out.push(t); continue; }
+            if (isGarbageWord(t)) { out.push(t); continue; }
             out.push(applyCase(t, applyGeneralRule(low)));
         }
         return out.join('');
@@ -543,7 +553,7 @@
         updateTranslation();
     });
 
-    inputArea.value = 'нормально, попа, жопа, училка, нет, почему, хай, шприц';
+    inputArea.value = 'нормально, попа, жопа, училка, нет, почему, хай, шприц, ывпт';
     loadDictionary();
 </script>
 </body>
