@@ -156,6 +156,7 @@
 </div>
 
 <script>
+    // ======================= СЛОВАРИ ИСКЛЮЧЕНИЙ =======================
     const rusToMellExceptions = new Map([
         ["русский язык", "Меллстройность"],
         ["училка", "Учительность"],
@@ -229,6 +230,7 @@
         usbToRusExceptions.set(usb.toLowerCase(), rus);
     }
 
+    // Фразы для приоритетной замены (длинные составные)
     const phraseRusToMell = [
         ["русский язык", "Меллстройность"],
         ["кто это", "Кьо этость"],
@@ -337,6 +339,7 @@
         return text.match(regex) || [];
     }
 
+    // Прямой перевод с использованием фраз и словарей, без общих правил для USB
     function translateDirect(text, srcLang, dstLang) {
         if (!text.trim()) return "";
         if (srcLang === dstLang) return text;
@@ -416,17 +419,54 @@
         return out.join('');
     }
 
-    function translateViaRussian(text, srcLang, dstLang) {
-        const rus = translateDirect(text, srcLang, 'ru');
-        return translateDirect(rus, 'ru', dstLang);
+    // Перевод через русский, но только если исходное слово найдено в словаре исходного языка
+    function translateViaRussianIfKnown(text, srcLang, dstLang) {
+        if (!text.trim()) return "";
+        const tokens = tokenize(text);
+        const out = [];
+        for (let t of tokens) {
+            if (!/[a-zA-Zа-яА-ЯёЁ]/.test(t)) {
+                out.push(t);
+                continue;
+            }
+            // проверяем, есть ли слово в словаре исходного языка
+            let known = false;
+            if (srcLang === 'usb') {
+                known = usbToRusExceptions.has(t.toLowerCase());
+            } else if (srcLang === 'mell') {
+                known = mellToRusExceptions.has(t.toLowerCase());
+            } else if (srcLang === 'ru') {
+                known = rusToMellExceptions.has(t.toLowerCase()) || rusToUsbExceptions.has(t.toLowerCase());
+            }
+            if (!known) {
+                out.push(t); // не знаем слово — не переводим
+                continue;
+            }
+            // переводим в русский
+            const rus = translateDirect(t, srcLang, 'ru');
+            // затем из русского в целевой язык
+            const final = translateDirect(rus, 'ru', dstLang);
+            out.push(final);
+        }
+        return out.join('');
     }
 
     function translate(text, srcLang, dstLang) {
         if (srcLang === dstLang) return text;
+        // Прямые пары с русским и меллстройным уже работают через translateDirect
+        // Для пар USB <-> mell используем транзит через русский, но только если слово известно в USB
         if ((srcLang === 'usb' && dstLang === 'mell') || (srcLang === 'mell' && dstLang === 'usb')) {
-            return translateViaRussian(text, srcLang, dstLang);
+            return translateViaRussianIfKnown(text, srcLang, dstLang);
         }
-        return translateDirect(text, srcLang, dstLang);
+        // Для пар, где одна сторона USB, а другая русский, используем translateDirect (он не применяет общих правил)
+        if ((srcLang === 'usb' && dstLang === 'ru') || (srcLang === 'ru' && dstLang === 'usb')) {
+            return translateDirect(text, srcLang, dstLang);
+        }
+        // Для пар русский <-> мелл
+        if ((srcLang === 'ru' && dstLang === 'mell') || (srcLang === 'mell' && dstLang === 'ru')) {
+            return translateDirect(text, srcLang, dstLang);
+        }
+        return text;
     }
 
     const inputArea = document.getElementById('inputArea');
